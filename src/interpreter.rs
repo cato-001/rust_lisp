@@ -5,21 +5,21 @@ use crate::{
 use std::{cell::RefCell, rc::Rc};
 
 /// Evaluate a single Lisp expression in the context of a given environment.
-pub fn eval(env: Rc<RefCell<Env>>, expression: &Value) -> Result<Value, RuntimeError> {
+pub fn eval(env: &mut Env, expression: &Value) -> Result<Value, RuntimeError> {
     eval_inner(env, expression, Context::new())
 }
 
 /// Evaluate a series of s-expressions. Each expression is evaluated in
 /// order and the final one's return value is returned.
 pub fn eval_block(
-    env: Rc<RefCell<Env>>,
+    env: &mut Env,
     clauses: impl Iterator<Item = Value>,
 ) -> Result<Value, RuntimeError> {
     eval_block_inner(env, clauses, Context::new())
 }
 
 fn eval_block_inner(
-    env: Rc<RefCell<Env>>,
+    env: &mut Env,
     clauses: impl Iterator<Item = Value>,
     context: Context,
 ) -> Result<Value, RuntimeError> {
@@ -27,7 +27,7 @@ fn eval_block_inner(
 
     for clause in clauses {
         if let Some(expr) = current_expr {
-            match eval_inner(env.clone(), &expr, context.found_tail(true)) {
+            match eval_inner(env, &expr, context.found_tail(true)) {
                 Ok(_) => (),
                 Err(e) => {
                     return Err(e);
@@ -42,7 +42,7 @@ fn eval_block_inner(
         eval_inner(env, expr, context)
     } else {
         Err(RuntimeError {
-            msg: "Unrecognized expression".to_owned(),
+            message: "Unrecognized expression".to_owned(),
         })
     }
 }
@@ -54,11 +54,7 @@ fn eval_block_inner(
 /// factor out function calls in, say, the conditional slot, which are not
 /// eligible to be the tail-call based on their position. A future refactor hopes
 /// to make things a little more semantic.
-fn eval_inner(
-    env: Rc<RefCell<Env>>,
-    expression: &Value,
-    context: Context,
-) -> Result<Value, RuntimeError> {
+fn eval_inner(env: &mut Env, expression: &Value, context: Context) -> Result<Value, RuntimeError> {
     if context.quoting {
         match expression {
             Value::List(list) if *list != List::NIL => match &list.car()? {
@@ -68,7 +64,7 @@ fn eval_inner(
                 _ => {
                     return list
                         .into_iter()
-                        .map(|el| eval_inner(env.clone(), &el, context))
+                        .map(|el| eval_inner(env, &el, context))
                         .collect::<Result<List, RuntimeError>>()
                         .map(Value::List);
                 }
@@ -79,8 +75,9 @@ fn eval_inner(
 
     match expression {
         // look up symbol
-        Value::Symbol(symbol) => env.borrow().get(symbol).ok_or_else(|| RuntimeError {
-            msg: format!("\"{}\" is not defined", symbol),
+        Value::Symbol(symbol) => env.get(symbol).map(ToOwned::to_owned).ok_or_else(|| {
+            let message = format!("\"{}\" is not defined", symbol);
+            RuntimeError::new(message)
         }),
 
         // s-expression
@@ -101,12 +98,12 @@ fn eval_inner(
                     let symbol = require_typed_arg::<&Symbol>(keyword, args, 0)?;
                     let value_expr = require_arg(keyword, args, 1)?;
 
-                    let value = eval_inner(env.clone(), value_expr, context.found_tail(true))?;
+                    let value = eval_inner(env, value_expr, context.found_tail(true))?;
 
                     if keyword == "define" {
-                        env.borrow_mut().define(symbol.clone(), value.clone());
+                        env.set(symbol.clone(), value.clone());
                     } else {
-                        env.borrow_mut().set(symbol.clone(), value.clone())?;
+                        env.update(symbol.clone(), value.clone());
                     }
 
                     Ok(value)
@@ -118,15 +115,15 @@ fn eval_inner(
                     let symbol = require_typed_arg::<&Symbol>(keyword, args, 0)?;
                     let argnames_list = require_typed_arg::<&List>(keyword, args, 1)?;
                     let argnames = value_to_argnames(argnames_list.clone())?;
-                    let body = Rc::new(Value::List(list.cdr().cdr().cdr()));
+                    let body = Value::List(list.cdr().cdr().cdr()).into();
 
                     let lambda = Value::Macro(Lambda {
-                        closure: env.clone(),
+                        closure: env.pop_frame()?,
                         argnames,
                         body,
                     });
 
-                    env.borrow_mut().define(symbol.clone(), lambda);
+                    env.set(symbol.clone(), lambda);
 
                     Ok(Value::NIL)
                 }
@@ -137,15 +134,15 @@ fn eval_inner(
                     let symbol = require_typed_arg::<&Symbol>(keyword, args, 0)?;
                     let argnames_list = require_typed_arg::<&List>(keyword, args, 1)?;
                     let argnames = value_to_argnames(argnames_list.clone())?;
-                    let body = Rc::new(Value::List(list.cdr().cdr().cdr()));
+                    let body = Value::List(list.cdr().cdr().cdr()).into();
 
                     let lambda = Value::Lambda(Lambda {
-                        closure: env.clone(),
+                        closure: env.pop_frame()?,
                         argnames,
                         body,
                     });
 
-                    env.borrow_mut().define(symbol.clone(), lambda);
+                    env.set(symbol.clone(), lambda);
 
                     Ok(Value::NIL)
                 }
@@ -155,41 +152,43 @@ fn eval_inner(
 
                     let argnames_list = require_typed_arg::<&List>(keyword, args, 0)?;
                     let argnames = value_to_argnames(argnames_list.clone())?;
-                    let body = Rc::new(Value::List(list.cdr().cdr()));
+                    let body = Value::List(list.cdr().cdr()).into();
 
                     Ok(Value::Lambda(Lambda {
-                        closure: env,
+                        closure: env.pop_frame()?,
                         argnames,
                         body,
                     }))
                 }
 
                 Value::Symbol(Symbol(keyword)) if keyword == "let" => {
-                    let let_env = Rc::new(RefCell::new(Env::extend(env)));
-
                     let args = &list.cdr().into_iter().collect::<Vec<Value>>();
 
                     let declarations = require_typed_arg::<&List>(keyword, args, 0)?;
 
                     for decl in declarations.into_iter() {
-                        let decl = &decl;
+                        env.add_default_frame();
 
-                        let decl_cons: &List = decl.try_into().map_err(|_| RuntimeError {
-                            msg: format!("Expected declaration clause, found {}", decl),
+                        let decl_cons: &List = (&decl).try_into().map_err(|_| {
+                            let message = format!("Expected declaration clause, found {}", decl);
+                            RuntimeError::new(message);
                         })?;
                         let symbol = &decl_cons.car()?;
-                        let symbol: &Symbol = symbol.try_into().map_err(|_| RuntimeError {
-                            msg: format!("Expected symbol for let declaration, found {}", symbol),
+                        let symbol: &Symbol = symbol.try_into().map_err(|_| {
+                            let message =
+                                format!("Expected symbol for let declaration, found {}", symbol);
+                            RuntimeError::new(message);
                         })?;
                         let expr = &decl_cons.cdr().car()?;
 
-                        let result = eval_inner(let_env.clone(), expr, context.found_tail(true))?;
-                        let_env.borrow_mut().define(symbol.clone(), result);
+                        let result = eval_inner(env, expr, context.found_tail(true))?;
+                        env.pop_frame()?;
+                        env.set(symbol.clone(), result);
                     }
 
                     let body = &Value::List(list.cdr().cdr());
                     let body: &List = body.try_into().map_err(|_| RuntimeError {
-                        msg: format!(
+                        message: format!(
                             "Expected expression(s) after let-declarations, found {}",
                             body
                         ),
@@ -209,7 +208,7 @@ fn eval_inner(
                         let clause = &clause;
 
                         let clause: &List = clause.try_into().map_err(|_| RuntimeError {
-                            msg: format!("Expected conditional clause, found {}", clause),
+                            message: format!("Expected conditional clause, found {}", clause),
                         })?;
 
                         let condition = &clause.car()?;
@@ -329,7 +328,7 @@ fn value_to_argnames(argnames: List) -> Result<Vec<Symbol>, RuntimeError> {
         .map(|(index, arg)| match arg {
             Value::Symbol(s) => Ok(s),
             _ => Err(RuntimeError {
-                msg: format!(
+                message: format!(
                     "Expected list of arg names, but arg {} is a {}",
                     index,
                     arg.type_name()
@@ -385,7 +384,7 @@ fn call_function_or_macro(
             )
         } else {
             Err(RuntimeError {
-                msg: format!("{} is not callable", func),
+                message: format!("{} is not callable", func),
             })
         }
     }

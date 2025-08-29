@@ -28,7 +28,7 @@ fn three() {
     assert_eq!(
         eval_str("(car (list))"),
         Err(RuntimeError {
-            msg: "Attempted to apply car on nil".to_owned()
+            message: "Attempted to apply car on nil".to_owned()
         })
     );
 }
@@ -51,7 +51,7 @@ fn six() {
     assert_eq!(
         eval_str("(cons (list 1 2 3) 4)"),
         Err(RuntimeError {
-            msg: "\"cons\" requires argument 2 to be a list; got 4".to_owned()
+            message: "\"cons\" requires argument 2 to be a list; got 4".to_owned()
         })
     );
 }

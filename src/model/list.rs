@@ -22,7 +22,7 @@ impl List {
             .as_ref()
             .map(|rc| rc.borrow().car.clone())
             .ok_or_else(|| RuntimeError {
-                msg: String::from("Attempted to apply car on nil"),
+                message: String::from("Attempted to apply car on nil"),
             })
     }
     #[must_use]

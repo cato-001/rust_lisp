@@ -11,21 +11,21 @@ use std::{cell::RefCell, rc::Rc};
 fn eval_basic_expression() {
     let result = eval_str("(+ (* 1 2) (/ 6 3))");
 
-    assert_eq!(result, Value::from(Into::<IntType>::into(4)));
+    assert_eq!(result, Value::Int(4));
 }
 
 #[test]
 fn eval_nil() {
     let result = eval_str("(== nil '())");
 
-    assert_eq!(result, Value::from(true));
+    assert_eq!(result, Value::True);
 }
 
 #[test]
 fn eval_quote_1() {
     let result = eval_str("(quote \"stuff\")");
 
-    assert_eq!(result, Value::String(String::from("stuff")));
+    assert_eq!(result, Value::String("stuff".to_owned()));
 }
 
 #[test]
@@ -46,14 +46,14 @@ fn eval_quote_tick_list() {
 fn eval_quote_tick_atom() {
     let result = eval_str("(nth 0 (list '12))");
 
-    assert_eq!(result, Value::from(Into::<IntType>::into(12)));
+    assert_eq!(result, Value::Int(12));
 }
 
 #[test]
 fn eval_quote_tick_symbol() {
     let result = eval_str("(nth 0 (list 'foo))");
 
-    assert_eq!(result, Value::Symbol(Symbol(String::from("foo"))));
+    assert_eq!(result, Value::Symbol("foo".into()));
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn eval_set_global() {
       foo)",
     );
 
-    assert_eq!(result, Value::from(Into::<IntType>::into(13)));
+    assert_eq!(result, Value::Int(13));
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn eval_set_local() {
       foo)",
     );
 
-    assert_eq!(result, Value::from(Into::<IntType>::into(12)));
+    assert_eq!(result, Value::Int(12));
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn tail_call_test() {
   ",
     );
 
-    assert_eq!(result, Value::from(Into::<IntType>::into(0)));
+    assert_eq!(result, Value::Int(0));
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn lambda_err() {
     assert_eq!(
         result,
         Err(RuntimeError {
-            msg: String::from("Expected list of arg names, but arg 0 is a F")
+            message: "Expected list of arg names, but arg 0 is a F".to_owned()
         })
     );
 }

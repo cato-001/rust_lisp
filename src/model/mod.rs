@@ -32,9 +32,11 @@ mod runtime_error;
 mod symbol;
 mod value;
 
-pub use env::Env;
-pub use lambda::Lambda;
-pub use list::List;
-pub use runtime_error::RuntimeError;
-pub use symbol::Symbol;
-pub use value::{ForeignValue, ForeignValueRc, HashMapRc, NativeFunc, Value};
+pub use self::{
+    env::{Env, Frame},
+    lambda::Lambda,
+    list::List,
+    runtime_error::RuntimeError,
+    symbol::Symbol,
+    value::{ForeignValue, ForeignValueRc, HashMapRc, NativeFunc, Value},
+};

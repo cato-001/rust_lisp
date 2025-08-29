@@ -1,106 +1,122 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use super::{RuntimeError, Symbol, Value};
 
 /// An environment of symbol bindings. Used for the base environment, for
 /// closures, for `let` statements, for function arguments, etc.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Env {
-    parent: Option<Rc<RefCell<Env>>>,
-    entries: HashMap<Symbol, Value>,
+    frames: Vec<Frame>,
 }
 
 impl Env {
-    /// Create a new, empty environment
-    pub fn new() -> Self {
-        Self {
-            parent: None,
-            entries: HashMap::new(),
-        }
+    pub fn add_frame(&mut self, frame: Frame) {
+        self.frames.push(frame);
     }
 
-    /// Create a new environment extending the given environment
-    pub fn extend(parent: Rc<RefCell<Env>>) -> Self {
-        Self {
-            parent: Some(parent),
-            entries: HashMap::new(),
-        }
+    pub fn add_default_frame(&mut self) {
+        let frame = Frame::default();
+        self.add_frame(frame);
     }
 
-    /// Walks up the environment hierarchy until it finds the symbol's value or
-    /// runs out of environments.
-    pub fn get(&self, key: &Symbol) -> Option<Value> {
-        if let Some(val) = self.entries.get(&key) {
-            Some(val.clone()) // clone the Rc
-        } else if let Some(parent) = &self.parent {
-            parent.borrow().get(key)
-        } else {
-            None
-        }
+    pub fn pop_frame(&mut self) -> Result<Frame, RuntimeError> {
+        self.frames.pop().ok_or_else(|| {
+            let message = "No env frames left.".to_owned();
+            RuntimeError { message }
+        })
     }
 
-    /// Define a new key in the current environment
-    pub fn define(&mut self, key: Symbol, value: Value) {
-        self.entries.insert(key, value);
+    /// Finds the value behind a symbol in the current environment.
+    pub fn get(&self, symbol: &Symbol) -> Option<&Value> {
+        self.frames.iter().find_map(|frame| frame.get(symbol))
+    }
+
+    /// Define a new key in the current environment.
+    pub fn set(&mut self, symbol: Symbol, value: Value) {
+        if let Some(frame) = self.frames.last_mut() {
+            frame.set(symbol, value)
+        }
     }
 
     /// Find the environment where this key is defined, and update its value.
     /// Returns an Err if the symbol has not been defined anywhere in the hierarchy.
-    pub fn set(&mut self, key: Symbol, value: Value) -> Result<(), RuntimeError> {
-        if self.entries.contains_key(&key) {
-            self.entries.insert(key, value);
-            Ok(())
-        } else if let Some(parent) = &self.parent {
-            parent.borrow_mut().set(key, value)
+    pub fn update(&mut self, symbol: Symbol, value: Value) -> Result<(), RuntimeError> {
+        if let Some(frame) = self.next_frame_with_symbol_mut(&symbol) {
+            Ok(frame.set(symbol, value))
         } else {
-            Err(RuntimeError {
-                msg: format!("Tried to set value of undefined symbol \"{}\"", key),
-            })
+            let message = format!("Tried to set value of undefined symbol \"{}\"", symbol);
+            Err(RuntimeError::new(message))
         }
     }
 
     /// Delete the nearest (going upwards) definition of this key
-    pub fn undefine(&mut self, key: &Symbol) {
-        if self.entries.contains_key(key) {
-            self.entries.remove(key);
-        } else if let Some(parent) = &self.parent {
-            parent.borrow_mut().undefine(key);
+    pub fn delete(&mut self, symbol: &Symbol) {
+        if let Some(frame) = self.next_frame_with_symbol_mut(symbol) {
+            frame.delete(symbol);
         }
     }
 
-    fn display_recursive(&self, output: &mut String, depth: i32) {
-        let indent = &(0..depth).map(|_| "  ").collect::<String>();
-
-        output.push_str(indent);
-        output.push_str("{ ");
-
-        for (symbol, value) in &self.entries {
-            output.push_str(format!("\n{}  {}: {}", indent, symbol, value).as_str());
-        }
-
-        if let Some(parent) = &self.parent {
-            output.push_str("\n\n");
-            parent
-                .as_ref()
-                .borrow()
-                .display_recursive(output, depth + 1);
-        }
-
-        output.push('\n');
-        output.push_str(indent);
-        output.push('}');
+    fn next_frame_with_symbol_mut(&mut self, symbol: &Symbol) -> Option<&mut Frame> {
+        self.frames
+            .iter_mut()
+            .filter(|frame| frame.has(&symbol))
+            .next()
     }
 }
 
-impl std::fmt::Display for Env {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut output = String::new();
+impl Display for Env {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Env:\n")?;
 
-        output.push_str("Env: ");
-        self.display_recursive(&mut output, 0);
+        for (index, frame) in self.frames.iter().enumerate() {
+            write!(f, "Frame {}:\n{}\n", index, frame)?;
+        }
 
-        write!(formatter, "{}", &output)
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Frame {
+    entries: HashMap<Symbol, Value>,
+}
+
+impl Frame {
+    fn get(&self, symbol: &Symbol) -> Option<&Value> {
+        self.entries.get(symbol)
+    }
+
+    fn set(&mut self, symbol: Symbol, value: Value) {
+        self.entries.insert(symbol, value);
+    }
+
+    fn delete(&mut self, symbol: &Symbol) {
+        self.entries.remove(symbol);
+    }
+
+    fn has(&self, symbol: &Symbol) -> bool {
+        self.entries.contains_key(symbol)
+    }
+}
+
+impl Display for Frame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (symbol, value) in self.entries.iter() {
+            write!(f, "{}: {}", symbol, value)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Hash for Frame {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for entry in self.entries {
+            entry.hash(state);
+        }
     }
 }

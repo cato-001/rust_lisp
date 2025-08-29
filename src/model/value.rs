@@ -59,7 +59,7 @@ pub trait ForeignValue {
 }
 
 /// A Rust function that is to be called from lisp code
-pub type NativeFunc = fn(env: Rc<RefCell<Env>>, args: &[Value]) -> Result<Value, RuntimeError>;
+pub type NativeFunc = fn(env: &mut Env, args: &[Value]) -> Result<Value, RuntimeError>;
 
 /// Alias for the contents of Value::HashMap
 pub type HashMapRc = Rc<RefCell<HashMap<Value, Value>>>;
@@ -118,7 +118,7 @@ impl TryFrom<&Value> for IntType {
         match value {
             Value::Int(n) => Ok(n.clone()),
             _ => Err(RuntimeError {
-                msg: format!("Expected int, got a {}", value),
+                message: format!("Expected int, got a {}", value),
             }),
         }
     }
@@ -137,7 +137,7 @@ impl TryFrom<&Value> for FloatType {
         match value {
             Value::Float(n) => Ok(*n),
             _ => Err(RuntimeError {
-                msg: format!("Expected float, got a {}", value),
+                message: format!("Expected float, got a {}", value),
             }),
         }
     }
@@ -156,7 +156,7 @@ impl<'a> TryFrom<&'a Value> for &'a String {
         match value {
             Value::String(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected string, got a {}", value),
+                message: format!("Expected string, got a {}", value),
             }),
         }
     }
@@ -175,7 +175,7 @@ impl<'a> TryFrom<&'a Value> for &'a Symbol {
         match value {
             Value::Symbol(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected symbol, got a {}", value),
+                message: format!("Expected symbol, got a {}", value),
             }),
         }
     }
@@ -194,7 +194,7 @@ impl<'a> TryFrom<&'a Value> for &'a List {
         match value {
             Value::List(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected list, got a {}", value),
+                message: format!("Expected list, got a {}", value),
             }),
         }
     }
@@ -213,7 +213,7 @@ impl<'a> TryFrom<&'a Value> for &'a Lambda {
         match value {
             Value::Lambda(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected function, got a {}", value),
+                message: format!("Expected function, got a {}", value),
             }),
         }
     }
@@ -232,7 +232,7 @@ impl<'a> TryFrom<&'a Value> for &'a HashMapRc {
         match value {
             Value::HashMap(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected hash map, got a {}", value),
+                message: format!("Expected hash map, got a {}", value),
             }),
         }
     }
@@ -257,7 +257,7 @@ impl<'a> TryFrom<&'a Value> for &'a ForeignValueRc {
         match value {
             Value::Foreign(n) => Ok(n),
             _ => Err(RuntimeError {
-                msg: format!("Expected foreign value, got a {}", value),
+                message: format!("Expected foreign value, got a {}", value),
             }),
         }
     }

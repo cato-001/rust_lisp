@@ -10,7 +10,7 @@ pub fn require_arg<'a>(
     index: usize,
 ) -> Result<&'a Value, RuntimeError> {
     args.get(index).ok_or_else(|| RuntimeError {
-        msg: format!(
+        message: format!(
             "\"{}\" requires an argument {}",
             func_or_form_name,
             index + 1
@@ -32,7 +32,7 @@ where
     require_arg(func_or_form_name, args, index)?
         .try_into()
         .map_err(|_| RuntimeError {
-            msg: format!(
+            message: format!(
                 "\"{}\" requires argument {} to be a {}; got {}",
                 func_or_form_name,
                 index + 1,

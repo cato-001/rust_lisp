@@ -16,9 +16,9 @@ cfg_if! {
 /// in Rust. **Without this, you will only have access to the functions you
 /// implement yourself.**
 pub fn default_env() -> Env {
-    let mut env = Env::new();
+    let mut env = Env::default();
 
-    env.define(
+    env.set(
         Symbol::from("print"),
         Value::NativeFunc(|_env, args| {
             let expr = require_arg("print", args, 0)?;
@@ -28,7 +28,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_null"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_null", args, 0)?;
@@ -37,7 +37,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_number"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_number", args, 0)?;
@@ -50,7 +50,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_symbol"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_symbol", args, 0)?;
@@ -62,7 +62,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_boolean"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_boolean", args, 0)?;
@@ -75,7 +75,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_procedure"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_procedure", args, 0)?;
@@ -88,7 +88,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("is_pair"),
         Value::NativeFunc(|_env, args| {
             let val = require_arg("is_pair", args, 0)?;
@@ -100,7 +100,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("car"),
         Value::NativeFunc(|_env, args| {
             let list = require_typed_arg::<&List>("car", args, 0)?;
@@ -109,7 +109,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("cdr"),
         Value::NativeFunc(|_env, args| {
             let list = require_typed_arg::<&List>("cdr", args, 0)?;
@@ -118,7 +118,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("cons"),
         Value::NativeFunc(|_env, args| {
             let car = require_arg("cons", args, 0)?;
@@ -128,26 +128,26 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("list"),
         Value::NativeFunc(|_env, args| Ok(Value::List(args.iter().collect::<List>()))),
     );
 
-    env.define(
+    env.set(
         Symbol::from("nth"),
         Value::NativeFunc(|_env, args| {
             let index = require_typed_arg::<IntType>("nth", args, 0)?;
             let list = require_typed_arg::<&List>("nth", args, 1)?;
 
             let index = TryInto::<usize>::try_into(index).map_err(|_| RuntimeError {
-                msg: "Failed converting to `usize`".to_owned(),
+                message: "Failed converting to `usize`".to_owned(),
             })?;
 
             Ok(list.into_iter().nth(index).unwrap_or(Value::NIL))
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("sort"),
         Value::NativeFunc(|_env, args| {
             let list = require_typed_arg::<&List>("sort", args, 0)?;
@@ -160,7 +160,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("reverse"),
         Value::NativeFunc(|_env, args| {
             let list = require_typed_arg::<&List>("reverse", args, 0)?;
@@ -173,7 +173,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("map"),
         Value::NativeFunc(|env, args| {
             let func = require_arg("map", args, 0)?;
@@ -183,15 +183,14 @@ pub fn default_env() -> Env {
                 .map(|val| {
                     let expr = lisp! { ({func.clone()} (quote {val})) };
 
-                    eval(env.clone(), &expr)
+                    eval(env, &expr)
                 })
                 .collect::<Result<List, RuntimeError>>()
                 .map(Value::List)
         }),
     );
 
-    // 🦀 Oh the poor `filter`, you must feel really sad being unused.
-    env.define(
+    env.set(
         Symbol::from("filter"),
         Value::NativeFunc(|env, args| {
             let func = require_arg("filter", args, 0)?;
@@ -201,7 +200,7 @@ pub fn default_env() -> Env {
                 .filter_map(|val: Value| -> Option<Result<Value, RuntimeError>> {
                     let expr = lisp! { ({func.clone()} (quote {val.clone()})) };
 
-                    match eval(env.clone(), &expr) {
+                    match eval(env, &expr) {
                         Ok(matches) => {
                             if matches.into() {
                                 Some(Ok(val))
@@ -217,7 +216,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("length"),
         Value::NativeFunc(|_env, args| {
             let list = require_typed_arg::<&List>("length", args, 0)?;
@@ -232,7 +231,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("range"),
         Value::NativeFunc(|_env, args| {
             let start = require_typed_arg::<IntType>("range", args, 0)?;
@@ -250,7 +249,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("hash"),
         Value::NativeFunc(|_env, args| {
             let chunks = args.chunks(2);
@@ -265,7 +264,7 @@ pub fn default_env() -> Env {
                     hash.insert(key.clone(), value.clone());
                 } else {
                     return Err(RuntimeError {
-                        msg: format!("Must pass an even number of arguments to 'hash', because they're used as key/value pairs; found extra argument {}", key)
+                        message: format!("Must pass an even number of arguments to 'hash', because they're used as key/value pairs; found extra argument {}", key)
                     });
                 }
             }
@@ -274,7 +273,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("hash_get"),
         Value::NativeFunc(|_env, args| {
             let hash = require_typed_arg::<&HashMapRc>("hash_get", args, 0)?;
@@ -288,7 +287,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("hash_set"),
         Value::NativeFunc(|_env, args| {
             let hash = require_typed_arg::<&HashMapRc>("hash_set", args, 0)?;
@@ -301,7 +300,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("+"),
         Value::NativeFunc(|_env, args| {
             let mut total = Value::NIL;
@@ -353,7 +352,7 @@ pub fn default_env() -> Env {
                     },
                     _ => {
                         return Err(RuntimeError {
-                            msg: format!(
+                            message: format!(
                                 "Function \"+\" requires arguments to be numbers or strings; found {}",
                                 arg
                             ),
@@ -366,7 +365,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("-"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("-", args, 0)?;
@@ -387,12 +386,12 @@ pub fn default_env() -> Env {
             }
 
             Err(RuntimeError {
-                msg: String::from("Function \"-\" requires arguments to be numbers"),
+                message: String::from("Function \"-\" requires arguments to be numbers"),
             })
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("*"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("*", args, 0)?;
@@ -413,12 +412,12 @@ pub fn default_env() -> Env {
             }
 
             Err(RuntimeError {
-                msg: String::from("Function \"*\" requires arguments to be numbers"),
+                message: String::from("Function \"*\" requires arguments to be numbers"),
             })
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("/"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("/", args, 0)?;
@@ -439,12 +438,12 @@ pub fn default_env() -> Env {
             }
 
             Err(RuntimeError {
-                msg: String::from("Function \"/\" requires arguments to be numbers"),
+                message: String::from("Function \"/\" requires arguments to be numbers"),
             })
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("truncate"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("truncate", args, 0)?;
@@ -458,12 +457,12 @@ pub fn default_env() -> Env {
             }
 
             Err(RuntimeError {
-                msg: String::from("Function \"truncate\" requires arguments to be integers"),
+                message: String::from("Function \"truncate\" requires arguments to be integers"),
             })
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("not"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("not", args, 0)?;
@@ -473,7 +472,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("=="),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("==", args, 0)?;
@@ -483,7 +482,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("!="),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("!=", args, 0)?;
@@ -493,7 +492,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("<"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("<", args, 0)?;
@@ -503,7 +502,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("<="),
         Value::NativeFunc(|_env, args| {
             let a = require_arg("<=", args, 0)?;
@@ -513,7 +512,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from(">"),
         Value::NativeFunc(|_env, args| {
             let a = require_arg(">", args, 0)?;
@@ -523,7 +522,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from(">="),
         Value::NativeFunc(|_env, args| {
             let a = require_arg(">=", args, 0)?;
@@ -533,7 +532,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("eval"),
         Value::NativeFunc(|env, args| {
             let expr = require_arg("eval", args, 0)?;
@@ -542,7 +541,7 @@ pub fn default_env() -> Env {
         }),
     );
 
-    env.define(
+    env.set(
         Symbol::from("apply"),
         Value::NativeFunc(|env, args| {
             let func = require_arg("apply", args, 0)?;
